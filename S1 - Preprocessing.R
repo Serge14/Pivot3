@@ -17,6 +17,18 @@ df = fread("N_Y2019M08_Volume.csv", check.names = TRUE, na.strings = "NA")
 df1 = fread("N_Y2019M08_Value.csv", check.names = TRUE, na.strings = "NA")
 SKU.Matrix = fread("SKU.Matrix.csv", check.names = TRUE, na.strings = "NA")
 
+expected.fields = c("Region", "SKU", "BRAND", "BRAND.OWNER", "DANONE.SEGMENT",
+                    "DANONE.SUB.SEGMENT", "PRODUCT.FORM", "TYPE...BABY.PRODUCT",
+                    "PRODUCT.BASE")
+
+types = c(rep("character", 4), "logical", rep("character", 4))
+
+reported.year = c(2019)
+reported.month = 8 # mention all month of the last year; if mmore than ine year is reported then all months of the previous years will be included automatically
+
+
+
+
 # Dimensions
 # Column names of volume file
 # Column names of value file
@@ -24,58 +36,106 @@ SKU.Matrix = fread("SKU.Matrix.csv", check.names = TRUE, na.strings = "NA")
 # Column types of volume file
 # Column types of value file
 
-# Check files dimensions
-if (all(dim(df) != dim(df1)) == TRUE) {
-  print("Dimensions: Files have different dimensions, please check files content.")
+incoming.files.validation = function(df, df1) {
+  # Check files dimensions
+  if (all(dim(df) != dim(df1)) == TRUE) {
+    print("Dimensions: Files have different dimensions, please check files content.")
+    
+  } else {
+    print("Dimensions: OK")
+  }
   
-} else {
-  print("Dimensions: OK")
+  # Column names of volume file
+  reported.year.length = length(reported.year)
+  
+  if (reported.year.length > 1) {
+    reported.year = c(rep(reported.year[1:(reported.year.length - 1)], each = 12),
+                      rep(reported.year[reported.year.length], length(reported.month)))
+    
+  }
+  
+  if (length(reported.month) > 1) {
+    reported.month = c(rep(1:12, (reported.year.length - 1)), reported.month)
+    
+  }
+  
+  expected.periods =  paste0(toupper(month.abb[reported.month]),
+                             ".", reported.year)
+  
+  # The check of the column names of volume file
+  if (all(names(df) == c(expected.fields, expected.periods)) == TRUE) {
+    print("Column names of Volume file: OK")
+    
+  } else if (all(names(df) %in% c(expected.fields, expected.periods) == TRUE)) {
+    print("Column names of Volume file: OK, but the order is different!")
+    
+  }
+  
+  # The check of the column names of value file
+  if (all(names(df) == c(expected.fields, expected.periods)) == TRUE) {
+    print("Column names of Volume file: OK")
+    
+  } else if (all(names(df) %in% c(expected.fields, expected.periods) == TRUE)) {
+    print("Column names of Volume file: OK, but the order is different!")
+    
+  }
+  
+  
+  # Column names identity
+  if (!all(names(df) == names(df1)) == TRUE) {
+    print("Files columns are different, please check files content.")
+    
+  } else {
+    print("Column names identical: OK")
+  }
+  
+  expected.types = c(types, rep("numeric", length(expected.periods)))
+  
+  if (all(as.vector(sapply(df, class)) == expected.types)) {
+    print("Column types of Volume file: OK")
+    
+  } else {
+    print(paste0(
+      "Volume file: types of ",
+      names(df)[!(as.vector(sapply(df, class)) == expected.types)],
+      " don't mact the expected ones."
+    ))
+  }
+  
+  if (all(as.vector(sapply(df1, class)) == expected.types)) {
+    print("Column types of Value file: OK")
+    
+  } else {
+    print(paste0(
+      "Value file: types of ",
+      names(df1)[!(as.vector(sapply(df1, class)) == expected.types)],
+      " don't mact the expected ones."
+    ))
+  }
+  
+  # Check SKUs in both files
+  
+  if (all(df[, SKU] == df1[, SKU])) {
+    print("SKUs are identical: OK")
+    
+  } else {
+    print("SKUs in volume file are different from the SKUs in Value file.")
+  }
+  
 }
 
-# Column names of volume file
+# Validate files
+incoming.files.validation(df, df1)
 
+### Process data for coding
 
+# Assign already existing attributes
 
-# Column names identity
-if (!all(names(df) == names(df1)) == TRUE) {
-  print("Files columns are different, please check files content.")
-  
-} else {
-  print("Column names identical: OK")
-}
+df = df[, .N,
+   by = .(SKU, BRAND, BRAND.OWNER, DANONE.SEGMENT, DANONE.SUB.SEGMENT, 
+          PRODUCT.FORM, TYPE...BABY.PRODUCT, PRODUCT.BASE)]
 
-# Check the volume file
-if (is.numeric(df[, dim(df)[2]]) == TRUE) {
-  print("Volume file seems to be OK. Check the structure visually.")
-  
-} else {
-  print("Volume sales might be not numeric. Check the structure visually.")
-  
-}
-
-cat("\n")
-str(df)
-
-# Check the value file
-if (is.numeric(df1[, dim(df)[2]]) == TRUE) {
-  print("Value file seems to be OK. Check the structure visually.")
-  
-} else {
-  print("Value sales might be not numeric. Check the structure visually.")
-  
-}
-
-cat("\n")
-str(df1
-)
-
-reported.year = 2019
-reported.month = 8
-
-paste0(toupper(month.abb[reported.month]), ".", reported.year)
-
-
-df[, SKU2 := str_trim(str_replace_all(SKU, "\\s+", " "))]
+df[, SKU2 := stri_trim_both(stri_replace_all_regex(SKU, "\\s+", " "))]
   
   # for private label
   
@@ -114,14 +174,6 @@ df[, SKU2 := str_trim(str_replace_all(SKU, "\\s+", " "))]
   df.existing = df[!is.na(Brand)]
   df = df[is.na(Brand)]
   
-
-
-df[Region == "KYIV RA&OM" | Region == "CENTER RA&OM", Region := "Center"]
-df[Region == "NORTH-EAST RA&OM" | Region == "SOUTH-EAST RA&OM" |
-     Region == "EAST RA&OM", Region := "East"]
-df[Region == "SOUTH RA&OM", Region := "South"]
-df[Region == "WEST RA&OM", Region := "West"]
-
 # Brand - Company
 df[dictCompanyBrand, on = c(BRAND = "NielsenBrand"), Brand := i.RTRIBrand]
 df[dictCompanyBrand, on = c(Brand = "RTRIBrand"), Company := i.RTRICompany]
