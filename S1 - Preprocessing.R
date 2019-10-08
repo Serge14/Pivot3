@@ -124,89 +124,193 @@ incoming.files.validation = function(df, df1) {
   
 }
 
+### Process data for coding
+
+export.new.skus = function(df, df1) {
+  # Assign already existing attributes
+  cols = c(
+    "SKU",
+    "BRAND",
+    "BRAND.OWNER",
+    "DANONE.SEGMENT",
+    "DANONE.SUB.SEGMENT",
+    "PRODUCT.FORM",
+    "TYPE...BABY.PRODUCT",
+    "PRODUCT.BASE",
+    "Region"
+  )
+  
+  df = melt.data.table(df, id.vars = cols)
+  df1 = melt.data.table(df1, id.vars = cols)
+  
+  if (all(names(df) == names(df1)) == TRUE) {
+    names(df)[11] = "Volume"
+    df[df1, on = c("SKU", "variable", "Region", "DANONE.SUB.SEGMENT"),
+       Value := i.value]
+    
+    df[is.na(Volume) | Volume == "", Volume := 0]
+    df[is.na(Value) | Value == "", Value := 0]
+    
+    df = df[(Volume + Value) > 0]
+    
+    df = df[, .N,
+            by = .(
+              SKU,
+              BRAND,
+              BRAND.OWNER,
+              DANONE.SEGMENT,
+              DANONE.SUB.SEGMENT,
+              PRODUCT.FORM,
+              TYPE...BABY.PRODUCT,
+              PRODUCT.BASE
+            )]
+    
+    df[, SKU2 := stri_trim_both(stri_replace_all_regex(SKU, "\\s+", " "))]
+    
+    # for private label
+    
+    df[SKU == "OTHER ITEMS PRIVATE LABEL",
+       c(
+         "Brand",
+         "SubBrand",
+         "Size",
+         "Age",
+         "Scent",
+         "Scent2",
+         "ScentType",
+         "PS0",
+         "PS2",
+         "PS3",
+         "PS",
+         "Form",
+         "Package",
+         "Company"
+       ) := SKU.Matrix[.SD, .(
+         Brand,
+         SubBrand,
+         Size,
+         Age,
+         Scent,
+         Scent2,
+         ScentType,
+         PS0,
+         PS2,
+         PS3,
+         PS,
+         Form,
+         Package,
+         Company
+       ),
+       on = c("SKU2", "DANONE.SUB.SEGMENT")]]
+    
+    if (df[SKU == "OTHER ITEMS PRIVATE LABEL" &
+           is.na(Brand), .N] > 0) {
+      print("Add Private Label line to the dictionary ans repeat operation.")
+      df[SKU == "OTHER ITEMS PRIVATE LABEL" & is.na(Brand)]
+      
+    } else {
+      df[is.na(Brand),
+         c(
+           "Brand",
+           "SubBrand",
+           "Size",
+           "Age",
+           "Scent",
+           "Scent2",
+           "ScentType",
+           "PS0",
+           "PS2",
+           "PS3",
+           "PS",
+           "Form",
+           "Package",
+           "Company"
+         ) := SKU.Matrix[.SD, .(
+           Brand,
+           SubBrand,
+           Size,
+           Age,
+           Scent,
+           Scent2,
+           ScentType,
+           PS0,
+           PS2,
+           PS3,
+           PS,
+           Form,
+           Package,
+           Company
+         ),
+         on = c("SKU2")]]
+
+      if (df[is.na(Brand), .N] > 0) {
+        df = df[is.na(Brand)]
+
+        # Add attributes
+        
+        # Brand - Company
+        df[dictCompanyBrand, on = c(BRAND = "NielsenBrand"), Brand := i.RTRIBrand]
+        df[dictCompanyBrand, on = c(Brand = "RTRIBrand"), Company := i.RTRICompany]
+        
+        df[is.na(Brand), .N]
+        df[is.na(Company), .N]
+        
+        if (df[is.na(Brand), .N] > 0) {
+          df[, Brand := stri_trans_totitle(BRAND)]
+        }
+        if (df[is.na(Company), .N] > 0) {
+          df[, Company := stri_trans_totitle(BRAND.OWNER)]
+        }
+        
+        df = addSize(df)
+        df = addForm(df)
+        df = addAge2(df)
+        
+        # PS0, PS2, PS3
+        df[dictSegments,
+           on = c(DANONE.SUB.SEGMENT = "NielsenSegment"),
+           `:=`(PS = i.PS,
+                PS3 = i.PS3,
+                PS0 = i.PS0)] # this is wrong due to PS2
+        df = addPS2(df)
+ 
+        df[SKU.Matrix[, .N, by = .(Brand, Company)], on = "Brand", Company := i.Company]
+        
+        df = df[, unique(SKU2),
+                by = .(
+                  SKU,
+                  Brand,
+                  SubBrand,
+                  Size,
+                  Age,
+                  Scent,
+                  Company,
+                  PS0,
+                  PS3,
+                  PS2,
+                  PS,
+                  Form,
+                  BRAND,
+                  BRAND.OWNER,
+                  DANONE.SEGMENT,
+                  DANONE.SUB.SEGMENT,
+                  PRODUCT.FORM,
+                  TYPE...BABY.PRODUCT,
+                  PRODUCT.BASE,
+                  Package
+                )][order(Brand)]
+        write.csv(df, "coding_test.csv", row.names = FALSE)
+        print("")
+        
+      } else {
+        print("There are no new SKUs")
+      }
+    }
+  }
+}
+
 # Validate files
 incoming.files.validation(df, df1)
 
-### Process data for coding
-
-# Assign already existing attributes
-
-df = df[, .N,
-   by = .(SKU, BRAND, BRAND.OWNER, DANONE.SEGMENT, DANONE.SUB.SEGMENT, 
-          PRODUCT.FORM, TYPE...BABY.PRODUCT, PRODUCT.BASE)]
-
-df[, SKU2 := stri_trim_both(stri_replace_all_regex(SKU, "\\s+", " "))]
-  
-  # for private label
-  
-  df[SKU == "OTHER ITEMS PRIVATE LABEL",
-     c("Brand", "SubBrand",
-       "Size", "Age", "Scent", "Scent2", "ScentType",
-       "PS0", "PS2", "PS3", "PS",
-       "Form", "Package",
-       "Company") := SKU.Matrix[.SD, .(Brand, SubBrand,
-                                       Size, Age, Scent, Scent2, ScentType,
-                                       PS0, PS2, PS3, PS,
-                                       Form, Package,
-                                       Company), 
-                                on = c("SKU2", "DANONE.SUB.SEGMENT")]]
-  
-  if (df[SKU == "OTHER ITEMS PRIVATE LABEL" & is.na(Brand), .N] > 0) {
-    
-    print("Add Private Label line to the dictionary ans repeat operation.")
-    df[SKU == "OTHER ITEMS PRIVATE LABEL" & is.na(Brand)]
-    
-  }
-  
-  df[is.na(Brand),
-     c("Brand", "SubBrand",
-       "Size", "Age", "Scent", "Scent2", "ScentType",
-       "PS0", "PS2", "PS3", "PS",
-       "Form", "Package",
-       "Company") := SKU.Matrix[.SD, .(Brand, SubBrand,
-                                       Size, Age, Scent, Scent2, ScentType,
-                                       PS0, PS2, PS3, PS,
-                                       Form, Package,
-                                       Company), 
-                                on = c("SKU2")]]
-  
-
-  df.existing = df[!is.na(Brand)]
-  df = df[is.na(Brand)]
-  
-# Brand - Company
-df[dictCompanyBrand, on = c(BRAND = "NielsenBrand"), Brand := i.RTRIBrand]
-df[dictCompanyBrand, on = c(Brand = "RTRIBrand"), Company := i.RTRICompany]
-
-df[is.na(Brand), .N]
-df[is.na(Company), .N]
-
-if (df[is.na(Brand), .N] > 0) {df[, Brand := str_to_title(BRAND)]}
-if (df[is.na(Company), .N] > 0) {df[, Company := str_to_title(BRAND.OWNER)]}
-
-# SubBrand
-#df = addSubBrand(df)
-# df[, SubBrand := NA]
-
-df = addSize(df)
-df = addForm(df)
-df = addAge2(df)
-
-# PS0, PS2, PS3
-df[dictSegments, 
-   on = c(DANONE.SUB.SEGMENT = "NielsenSegment"), 
-   `:=`(PS = i.PS, PS3 = i.PS3, PS0 = i.PS0)] # this is wrong due to PS2
-df = addPS2(df)
-
-### EXPORT FOR CODING
-df[, SKU2 := str_trim(str_replace_all(SKU, "\\s+", " "))]
-
-
-df[SKU.Matrix[, .N, by = .(Brand, Company)], on = "Brand", Company := i.Company]
-
-a=df[, unique(SKU2),
-     by = .(SKU, Brand, SubBrand, Size, Age, Scent, Company, 
-            PS0, PS3, PS2, PS, Form,
-            BRAND, BRAND.OWNER, DANONE.SEGMENT, DANONE.SUB.SEGMENT, 
-            PRODUCT.FORM, TYPE...BABY.PRODUCT, PRODUCT.BASE, Package)][order(Brand)]
-write.csv(a, "coding.csv", row.names = FALSE)
+# Export new skus for coding
+export.new.skus(df, df1)
