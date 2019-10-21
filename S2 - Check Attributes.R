@@ -51,118 +51,101 @@ df = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201908/New SKUs - AUG19.
 
 df1 = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201907/df.corrected.csv")
 
-list1 = df[, unique(Brand)][!(df[, unique(Brand) %in% df1[, Brand]])]
-attributes = c("Brand", "SubBrand", 
-               "Size", "Age",
-               "Scent", "Company", 
-               "PS0", "PS3", "PS2", "PS",
-               "Form", "Package")
+
+attributes = c("Brand",
+               "SubBrand",
+               "Size",
+               "Age",
+               "Scent",
+               "Company",
+               "PS",
+               "Form",
+               "Package")
+
+dictPS = c(
+  "Allergy Treatment",
+  "AMN",
+  "DR-NL",
+  "Anti Reflux",
+  "BFO",
+  "Hypoallergenic",
+  "BIF",
+  "BPFO",
+  "BPIF",
+  "CB-C",
+  "Fruit",
+  "Digestive Comfort",
+  "IMC",
+  "Fruit Plus",
+  "Goat",
+  "Gum Base",
+  "Preterm",
+  "RTE Cereals",
+  "IPC",
+  "Meat Meal",
+  "Veggie Meal",
+  "Non Dairy",
+  "Other Dairy",
+  "Soy",
+  "Soups",
+  "Juice",
+  "Tea",
+  "Water",
+  "Yoghurt",
+  "Kefir",
+  "Gum Plus",
+  "Meal Components"
+)
+
+dictPackage = c("Can",
+                "Carton",
+                "Foiled box",
+                "Glass",
+                "Plastic",
+                "Pouch",
+                "Soft")
+
+dictForm = c("Liquid", "Not Applicable", "Powder", "Pure", "Solid")
+
+# Pre-processing of values
+# Form to title
+df[ , (attributes) := lapply(.SD, function(x){stri_trans_totitle(x)}), 
+    .SDcols = attributes]
 
 print("Grammar...")
 
-  for (i in attributes) {
-    
-    if (i == "PS") {
-      dictTemp = c("Allergy Treatment", "AMN", "DR-NL",
-                 "Anti Reflux", "BFO", "Hypoallergenic",
-                 "BIF", "BPFO", "BPIF", "CB-C",
-                 "Fruit", "Digestive Comfort","IMC",
-                 "Fruit Plus",  "Goat", "Gum Base",
-                 "Preterm", "RTE Cereals", "IPC",
-                 "Meat Meal", "Veggie Meal", "Non Dairy",
-                 "Other Dairy", "Soy", "Soups", "Juice",
-                 "Tea", "Water", "Yoghurt", "Kefir",
-                 "Gum Plus", "Meal Components")
-      
-      if (all(df[, unique(PS)] %in% dictTemp)) {
-        print("PS: OK")
-        
-      } else {
-        list1 = df[, unique(PS)][!(df[, unique(PS)] %in% dictTemp)]
-        
-        print(paste0("Suspicious segments:"))
-        print(list1)
-        cat("\n")
-        
-        print("SKUs:")
-        print(df[(PS %in% list1), PS, by = SKU])
-        
-      }
-      
-    }
-    
-    if (i == "Form") {
-      dictTemp = c()
-      
-      if (all(df[, unique(PS)] %in% dictTemp)) {
-        print("PS: OK")
-        
-      } else {
-        list1 = df[, unique(PS)][!(df[, unique(PS)] %in% dictTemp)]
-        
-        print(paste0("Suspicious segments:"))
-        print(list1)
-        cat("\n")
-        
-        print("SKUs:")
-        print(df[(PS %in% list1), PS, by = SKU])
-        
-      }
-      
-    }
-    
-    if (i == "Package") {
-      dictTemp = c("Allergy Treatment", "AMN", "DR-NL",
-                   "Anti Reflux", "BFO", "Hypoallergenic",
-                   "BIF", "BPFO", "BPIF", "CB-C",
-                   "Fruit", "Digestive Comfort","IMC",
-                   "Fruit Plus",  "Goat", "Gum Base",
-                   "Preterm", "RTE Cereals", "IPC",
-                   "Meat Meal", "Veggie Meal", "Non Dairy",
-                   "Other Dairy", "Soy", "Soups", "Juice",
-                   "Tea", "Water", "Yoghurt", "Kefir",
-                   "Gum Plus", "Meal Components")
-      
-      if (all(df[, unique(PS)] %in% dictTemp)) {
-        print("PS: OK")
-        
-      } else {
-        list1 = df[, unique(PS)][!(df[, unique(PS)] %in% dictTemp)]
-        
-        print(paste0("Suspicious segments:"))
-        print(list1)
-        cat("\n")
-        
-        print("SKUs:")
-        print(df[(PS %in% list1), PS, by = SKU])
-        
-      }
-      
-    }
-    
-    
-    # Form, Package
-    # Size - separate function
-    # Age - ?
-    # Scent
-    
-    if (i %in% c("Brand", "SubBrand", "Company", "Age"))
-    
+for (i in attributes) {
+  # Size - separate function
+  # Age - ?
+  # Scent
+  
+  if (i %in% c("Brand", "SubBrand", "Company", "Age")) {
     list1 = df[, unique(get(i))][!(df[, unique(get(i)) %in% df1[, get(i)]])]
     
-    if (length(list1) > 0) {
-      print(paste0("New ", i, "s:"))
-      print(list1)
-      cat("\n")
-      print("New SKUs:")
-      print(df[get(i) %in% list1, get(i), by = SKU])
-      
-    } else {
-      print(paste0(i, ": OK"))
-      
-    }
+  } else if (i == "PS") {
+    list1 = df[, unique(get(i))][!(df[, unique(get(i)) %in% dictPS])]
+    
+  } else if (i == "Form") {
+    list1 = df[, unique(get(i))][!(df[, unique(get(i)) %in% dictForm])]
+    
+  } else if (i == "Package") {
+    list1 = df[, unique(get(i))][!(df[, unique(get(i)) %in% dictPackage])]
   }
+  
+  if (length(list1) > 0) {
+    print(paste0("Suspicious ", i, "s:"))
+    print(list1)
+    cat("\n")
+    print("SKUs:")
+    print(df[get(i) %in% list1, get(i), by = SKU])
+    
+  } else {
+    print(paste0("Grammar of ", i, ": OK"))
+    cat("\n")
+    
+  }
+}
+
+# Company-Brand
 
 
-
-df[, unique(Brand)][!df[, unique(Brand) %in% df1[,unique(Brand)]]]
