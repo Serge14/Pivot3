@@ -49,7 +49,7 @@ correct.UOM = function(text.string) {
 df = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201908/New SKUs - AUG19.csv",
            check.names = TRUE)
 
-df1 = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201907/df.corrected.csv")
+df1 = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201908/df.corrected.csv")
 
 
 attributes = c("Brand",
@@ -109,6 +109,9 @@ dictForm = c("Liquid", "Not Applicable", "Powder", "Pure", "Solid")
 
 # Pre-processing of values
 # Form to title
+df[ , (attributes) := lapply(.SD, function(x){stri_replace_all_regex(x, "\\s+", " ")}), 
+    .SDcols = attributes]
+
 df[ , (attributes) := lapply(.SD, function(x){stri_trans_totitle(x)}), 
     .SDcols = attributes]
 
@@ -147,5 +150,69 @@ for (i in attributes) {
 }
 
 # Company-Brand
+print("Pair Company-Brand")
+list1 = df[, unique(paste0(Brand, "-", Company))][
+  !(df[, unique(paste0(Brand, "-", Company))] %in% 
+      df1[, unique(paste0(Brand, "-", Company))])]
+
+if (length(list1) > 0) {
+  print(paste0("Suspicious Brand-Company piar(s)"))
+  print(list1)
+  cat("\n")
+  print("SKUs:")
+  print(df[paste0(Brand, "-", Company) %in% list1, 
+           .(Brand, Company), by = SKU])
+  
+} else {
+  print(paste0("Brand-Company: OK"))
+  cat("\n")
+  
+}
+
+# Scent: grammar, sorting, extra spaces
+list1 = df[, unique(unlist(stri_split_fixed(Scent, "-")))]
+dictScent = df1[, unique(unlist(stri_split_fixed(Scent, "-")))]
+
+list1 = !(list1 %in% dictScent)
+
+if (length(list1) > 0) {
+  print(paste0("Suspicious Scent(s)"))
+  print(list1)
+  cat("\n")
+  print("SKUs:")
+  print(df[list1, ##### THINK!!!!
+           .(Brand, Company), by = SKU])
+  
+} else {
+  print(paste0("Brand-Company: OK"))
+  cat("\n")
+  
+}
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+df1[ , Scent := lapply(.SD, function(x){stri_replace_all_regex(x, "\\s+", " ")}), 
+    .SDcols = "Scent"]
+
+df1[ , Scent := lapply(.SD, function(x){stri_trans_totitle(x)}), 
+    .SDcols = "Scent"]
+
+df1[ , Scent := lapply(.SD, function(x){stri_trim_both(x)}), 
+    .SDcols = "Scent"]
+
+fwrite(df1, "/home/sergiy/Documents/Work/Nutricia/Rework/201908/df.corrected2.csv")
