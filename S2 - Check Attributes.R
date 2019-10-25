@@ -62,40 +62,54 @@ attributes = c("Brand",
                "Form",
                "Package")
 
-dictPS = c(
+dictPS.IMF = c(
   "Allergy Treatment",
-  "AMN",
-  "DR-NL",
   "Anti Reflux",
   "BFO",
-  "Hypoallergenic",
   "BIF",
   "BPFO",
   "BPIF",
-  "CB-C",
-  "Fruit",
   "Digestive Comfort",
-  "IMC",
-  "Fruit Plus",
+  "DR-NL",
   "Goat",
   "Gum Base",
+  "Gum Plus",
+  "Hypoallergenic",
   "Preterm",
-  "RTE Cereals",
+  "Soy",
+  "Soy / Goat"
+)
+
+dictPS.Foods = c(
+  "CB-C",
+  "Fruit",
+  "Fruit Plus",
+  "IMC",
   "IPC",
+  "Juice",
+  "Kefir",
+  "Meal Components",
   "Meat Meal",
-  "Veggie Meal",
   "Non Dairy",
   "Other Dairy",
-  "Soy",
+  "RTE Cereals",
   "Soups",
-  "Juice",
   "Tea",
+  "Veggie Meal",
   "Water",
-  "Yoghurt",
-  "Kefir",
-  "Gum Plus",
-  "Meal Components"
+  "Yoghurt"
 )
+
+dictPS = c(dictPS.IMF, dictPS.Foods)
+
+dictPS3.IMF = c("Base", "Plus", "Specials")
+dictPS3.Foods = c("Cereal Biscuits",
+                  "Dairy/desserts",
+                  "Drinks",
+                  "Fruits",
+                  "Instant Cereals",
+                  "RTE Cereals",
+                  "Savoury Meal")
 
 dictPackage = c("Can",
                 "Carton",
@@ -170,28 +184,69 @@ if (length(list1) > 0) {
 }
 
 # Scent: grammar, sorting, extra spaces
+df[, Scent := stri_replace_all_regex(Scent, "\\s*-\\s*", "-")]
+
 list1 = df[, unique(unlist(stri_split_fixed(Scent, "-")))]
 dictScent = df1[, unique(unlist(stri_split_fixed(Scent, "-")))]
 
-list1 = !(list1 %in% dictScent)
+list1 = list1[!(list1 %in% dictScent)]
 
 if (length(list1) > 0) {
   print(paste0("Suspicious Scent(s)"))
   print(list1)
   cat("\n")
   print("SKUs:")
-  print(df[list1, ##### THINK!!!!
-           .(Brand, Company), by = SKU])
+  print(df[stri_detect_regex(Scent, paste(list1, collapse = "|")),
+           .(Brand, Scent), by = SKU])
   
 } else {
-  print(paste0("Brand-Company: OK"))
+  print(paste0("Scent: OK"))
   cat("\n")
   
 }
 
+df[, Scent := sapply(stri_split_fixed(Scent, "-"), function(x) 
+  paste(sort(x), collapse = "-"))]
+
+# Check correct segments
 
 
 
+print("Checking correct segments PS0, PS2, PS3...")
+
+# PS0
+if(df[(PS == "AMN" & PS0 != "AMN") |
+      (PS %in% dictPS.IMF
+      & PS0 != "IMF") |
+  (PS %in% dictPS.Foods & PS0 != "Foods"), .N] > 0) {
+  print("Suspicious PS0 or PS:")
+  print(df[(PS == "AMN" & PS0 != "AMN") |
+             (PS %in% dictPS.IMF
+           & PS0 != "IMF") |
+             (PS %in% dictPS.Foods & PS0 != "Foods"),
+           SKU, by = .(PS0, PS)])
+  
+} else {print("PS0: OK")}
+
+cat("\n")
+
+# PS2
+
+
+
+# PS3
+if(df[(PS == "AMN" & PS3 != "AMN") |
+      (PS %in% dictPS3.IMF
+       & PS0 != "IMF") |
+      (PS %in% dictPS3.Foods & PS0 != "Foods"), .N] > 0) {
+  print("Suspicious PS3 or PS:")
+  print(df[(PS == "AMN" & PS3 != "AMN") |
+             (PS %in% dictPS3.IMF
+              & PS0 != "IMF") |
+             (PS %in% dictPS3.Foods & PS0 != "Foods"),
+           SKU, by = .(PS3, PS)])
+  
+} else {print("PS3: OK")}
 
 
 
