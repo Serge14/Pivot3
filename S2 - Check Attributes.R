@@ -6,16 +6,69 @@
 # - correctness of the segments
 # - scent: grammar, sorting, extra spaces
 
+addPS2 = function(df){
+  
+  #IF from 0 to 6, but actually from less than 6 months
+  df[PS0 == "IMF" & as.numeric(stri_extract_first_regex(Age, "[0-9]{1,2}")) < 6 & 
+       !stri_detect_fixed(Age, "Y"), 
+     PS2.Temp := "IF"]
+  
+  # FO (6-12) starts from 6 to less than 12
+  df[PS0 == "IMF" & 
+       as.numeric(stri_extract_first_regex(Age, "[0-9]{1,2}")) >= 6 &
+       as.numeric(stri_extract_first_regex(Age, "[0-9]{1,2}")) < 12 &
+       !stri_detect_fixed(Age, "Y"),
+     PS2.Temp := "FO"]
+  
+  # GUM 12+
+  df[PS0 == "IMF" & as.numeric(stri_extract_first_regex(Age, "[0-9]{1,2}")) >= 12 &
+       !stri_detect_fixed(Age, "Y"), 
+     PS2.Temp := "Gum"]
+  
+  df[PS0 == "IMF" & stri_detect_fixed(Age, "Y"), 
+     PS2.Temp := "Gum"]
+  
+  # Others are not stated
+  df[PS0 == "IMF" & is.na(PS2), PS2.Temp := "N/S"]
+  
+  # Dry Food
+  DryFoodSegments = c("Instant Cereals",
+                      "Cereal Biscuits",
+                      "Ready To Eat Cereals",
+                      "Liquid Cereals")
+  
+  df[PS3 %in% DryFoodSegments, PS2.Temp := "Dry Food"]
+  
+  # Wet Food
+  WetFoodSegments = c("Fruits",
+                      "Drinks",
+                      "Savoury Meal",
+                      "Dairy/desserts")
+  
+  df[PS3 %in% WetFoodSegments, PS2.Temp := "Wet Food"]
+  
+  # AMN
+  df[PS3 == "AMN", PS2.Temp := "AMN"]
+  
+  # All others
+  df[is.na(PS2), PS2 := ""]
+  
+}
 
 check.UOM.db = function(df) {
   
   names(df)[1] = "SKU"
   # Check the style
+  
+  if (df[!stri_detect_regex(Size, "^([0-9]+\\*)*[0-9]*\\.?[0-9]+(Gr|Ml|Lt)") &
+         Brand != "Private label", .N] > 0){
   print("Strange Size style:")
   print(df[!stri_detect_regex(Size, "^([0-9]+\\*)*[0-9]*\\.?[0-9]+(Gr|Ml|Lt)") &
              Brand != "Private label",
            .(Size = unique(Size)),
            by = SKU])
+  
+  } else {print("Style size: OK")}
   
   cat("\n")
   print("Strange Size numbers:")
@@ -23,11 +76,18 @@ check.UOM.db = function(df) {
   dt[, Size.Value := stri_extract_all_regex(Size, "[0-9]*\\.?[0-9]+(?!\\*|x|X)")]
   dt[, Size.UOM := stri_extract_last_regex(Size, "[a-zA-Z]+")]
   
+  if (dt[(Size.UOM == "Gr" & (Size.Value < 10 | Size.Value > 1000)) |
+       (Size.UOM == "Kg" & (Size.Value < 0.1 | Size.Value > 1)) |
+       (Size.UOM == "Ml" & (Size.Value < 50 | Size.Value > 1000)) |
+       (Size.UOM == "Lt" & (Size.Value < 0.1 | Size.Value > 5)), .N] > 0) {
+  
   print(dt[(Size.UOM == "Gr" & (Size.Value < 10 | Size.Value > 1000)) |
              (Size.UOM == "Kg" & (Size.Value < 0.1 | Size.Value > 1)) |
              (Size.UOM == "Ml" & (Size.Value < 50 | Size.Value > 1000)) |
              (Size.UOM == "Lt" & (Size.Value < 0.1 | Size.Value > 5)),
            Size, by = SKU])
+  
+  } else {print("Size numbers: OK")}
   
   rm(dt)
   
@@ -51,14 +111,13 @@ df = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201908/New SKUs - AUG19.
 
 df1 = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201908/df.corrected.csv")
 
+check.attributes = function(df){
 
 attributes = c("Brand",
                "SubBrand",
-               "Size",
                "Age",
                "Scent",
                "Company",
-               "PS",
                "Form",
                "Package")
 
@@ -210,8 +269,6 @@ df[, Scent := sapply(stri_split_fixed(Scent, "-"), function(x)
 
 # Check correct segments
 
-
-
 print("Checking correct segments PS0, PS2, PS3...")
 
 # PS0
@@ -231,7 +288,12 @@ if(df[(PS == "AMN" & PS0 != "AMN") |
 cat("\n")
 
 # PS2
-
+df = addPS2(df)
+if (df[PS2 != PS2.Temp, .N] > 0) {
+  print("Suspicious PS2 or PS:")
+  print(df[PS2 != PS2.Temp, SKU, by = .(PS2, PS2.Temp, PS)])
+  
+} else {print("PS2: OK")}
 
 
 # PS3
@@ -248,11 +310,13 @@ if(df[(PS == "AMN" & PS3 != "AMN") |
   
 } else {print("PS3: OK")}
 
+# Size
+check.UOM.db(df)
 
+# Clean
+df[, PS2.Temp := NULL]
 
-
-
-
+}
 
 
 
